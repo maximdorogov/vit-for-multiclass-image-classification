@@ -75,20 +75,14 @@ if __name__ == "__main__":
                         type=str,
                         required=True)
     parser.add_argument('-fo', '--output_csv_file',
-                        help=('output path for the generated csv file with',
-                              ' images path and labels'),
+                        help=('output path for the generated csv file with ',
+                              'images path and labels'),
                         type=str,
                         required=True)
     parser.add_argument('-of', '--output_image_folder',
                         help=('Dataset output folder'),
                         type=str,
                         required=True)
-    parser.add_argument('-p', '--split_percentage',
-                        help=('Fraction of data will be used for test'
-                        ),
-                        type=float,
-                        required=False,
-                        default=0.2)
 
     args = parser.parse_args()
 
