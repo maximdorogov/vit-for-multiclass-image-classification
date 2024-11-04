@@ -3,34 +3,31 @@ import pandas as pd
 import argparse
 import shutil
 
-'''
-A simple script to generate the required dataset using as input a Kaggle
-dataset for image classification
-'''
 
 def is_image(file_name: str) -> bool:
     return file_name.lower().endswith(
         ('.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff'))    
 
 def generate_image_csv(
-    data_dir: str, 
+    data_dir: str,
 ) -> pd.DataFrame:
     """
-    Generate a CSV file with image paths and class labels using pandas.
+    Generate a CSV file with image paths and class labels.
     
-    Parameters:
-    - data_dir: Path to the root directory containing class-named folders of images.
-    - output_csv: Path to save the generated CSV file.
+    Parameters
+    ----------
+    data_dir:str
+        Path to the root directory containing class-named folders of images.
+    output_csv:str
+        Path to save the generated CSV file.
     """
     data = []
-    
-    # Loop through each class folder in the data directory
+
     for class_name in os.listdir(data_dir):
         class_path = os.path.join(data_dir, class_name)
+
         if os.path.isdir(class_path):
-            # Loop through each image file in the class folder
             for image_name in os.listdir(class_path):
-                # Check for common image file extensions
                 if is_image(file_name=image_name):
                     data.append([image_name, class_name])
     return pd.DataFrame(data)
@@ -42,23 +39,23 @@ def move_images_to_single_folder(
     """
     Move all images from class-named subfolders into a single output folder.
     
-    Parameters:
-    - data_dir: Path to the root directory containing class-named folders of images.
-    - output_folder: Path to the folder where all images will be moved.
+    Parameters
+    ----------
+    data_dir:str
+        Path to the root directory containing class-named folders of images.
+    output_folder:str
+        Path to the folder where all images will be moved.
     """
-    
-    # Create the output folder if it doesn't exist
+
     os.makedirs(output_folder, exist_ok=True)
     
-    # Loop through each class folder in the data directory
     for class_name in os.listdir(data_dir):
         class_path = os.path.join(data_dir, class_name)
 
         if os.path.isdir(class_path):
             for image_name in os.listdir(class_path):
-                # Check for common image file extensions
+
                 if is_image(file_name=image_name):
-                    # Define the source and destination paths
                     src_path = os.path.join(class_path, image_name)
                     dest_path = os.path.join(output_folder, image_name)
                     shutil.move(src_path, dest_path)
@@ -87,8 +84,10 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     images_df = generate_image_csv(data_dir=args.input_data_path)
+
     move_images_to_single_folder(
         data_dir=args.input_data_path, output_folder=args.output_image_folder)
+    
+    print(f'{len(images_df)} images moved')
 
-    print(f'{len(images_df)} images loaded')
     images_df.to_csv(args.output_csv_file, index=False, header=False)
