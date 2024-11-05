@@ -1,0 +1,5 @@
+model_name: 'WinKawaks/vit-small-patch16-224'
+epochs: 10
+batch_size: 4
+learning_rate: 5e-4
+data_split: 0.2

@@ -1,8 +1,6 @@
 import pandas as pd
 import os
 import argparse
-from pydantic import BaseModel
-from PIL import Image
 import torch
 import numpy as np
 from torchvision import transforms as T
@@ -13,49 +11,7 @@ from transformers import (
     TrainingArguments, 
     Trainer,
 )
-import evaluate
-import supervision as sv
-
-
-class PlantGrassDataset(torch.utils.data.Dataset):
-    
-    IMG_NAME_COL = 0
-    IMG_CLASS_COL = 1
-
-    def __init__(self, dataset_csv:str, folder_path: str, transform=None):
-        """
-        dataset_csv:str
-            Path to a csv file contaning image name and class labels
-        folder_path:str
-            Path to a folder with all the images
-        """
-        super().__init__()
-
-        self.transform = transform
-        self._folder_path = folder_path
-        self._dataset_df = pd.read_csv(dataset_csv, header=None)
-        self.labels = list(set(self._dataset_df[self.IMG_CLASS_COL]))
-        self.label2id = {label:i for i, label in enumerate(self.labels)}
-        self.id2label = {i:label for i, label in enumerate(self.labels)}
-        print(self.label2id)
-
-    def __getitem__(self, index):
-        # store as attributes for further usage
-        self.image_name, self.class_name = self._dataset_df.loc[index]
-        image = Image.open(os.path.join(self._folder_path, self.image_name))
-        image = image.convert('RGB')
-        if self.transform:
-            image = self.transform(image)
-        return {"pixel_values": image, "label": self.label2id[self.class_name]}
-
-    def __len__(self):
-        return len(self._dataset_df)
-
-
-class TrainingConfig(BaseModel):
-    model_name: str
-    epochs: int
-    learning_rate: float
+from utils.utils import PlantGrassDataset, load_training_cfg, compute_metrics
 
 
 if __name__ == "__main__":
@@ -76,12 +32,10 @@ if __name__ == "__main__":
                         help=('Folder to save the model and training artifacts'),
                         type=str,
                         required=False)
-    parser.add_argument('-m', '--model_name',
-                        help=('Pretrained ViT model name compatible with ',
-                              'transformers python package'),
+    parser.add_argument('-t', '--train_cfg',
+                        help=('Training config file'),
                         type=str,
-                        default='WinKawaks/vit-small-patch16-224',
-                        required=False)
+                        required=True)
 
     args = parser.parse_args()
 
@@ -90,11 +44,13 @@ if __name__ == "__main__":
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
     torch.backends.cudnn.deterministic = True
+    
+    train_cfg = load_training_cfg(cfg_path=args.train_cfg)
 
-    model_name = args.model_name
     # create experiment folder
     os.makedirs(args.experiment_folder, exist_ok=True)
 
+    model_name = train_cfg.model_name
     processor = ViTImageProcessor.from_pretrained(model_name)
     transforms = T.Compose([
         T.ToTensor(),
@@ -103,7 +59,6 @@ if __name__ == "__main__":
         T.Resize((processor.size["height"], processor.size["width"])),
         Normalize(mean=processor.image_mean, std=processor.image_std)
     ])
-
     main_dataset = PlantGrassDataset(
         dataset_csv=args.input_csv_file,
         folder_path=args.input_images_path,
@@ -111,11 +66,11 @@ if __name__ == "__main__":
         )
 
     # split main dataset
-    val_perc = 0.2
+    val_perc = train_cfg.data_split
     train_data, val_data = torch.utils.data.random_split(
         main_dataset, [1 - val_perc, val_perc])
 
-    # export image filenames and classes used for validation
+    # Export image filenames and classes used for validation
     data_for_export = [
         (val_data.dataset.image_name, val_data.dataset.class_name) 
         for _, _ in val_data]
@@ -127,35 +82,30 @@ if __name__ == "__main__":
     print(f'Train samples: {len(train_data)}\nTest samples: {len(val_data)}')
 
     # Training stage
-
     model = ViTForImageClassification.from_pretrained(
         model_name,
         id2label=main_dataset.id2label,
         label2id=main_dataset.label2id,
         ignore_mismatched_sizes=True)
-    
-    accuracy = evaluate.load("accuracy")
-
-    def compute_metrics(eval_pred):
-        predictions, labels = eval_pred
-        predictions = np.argmax(predictions, axis=1)
-        return accuracy.compute(predictions=predictions, references=labels)
 
     training_args = TrainingArguments(
         output_dir=args.experiment_folder,
         remove_unused_columns=False,
+        #  Eval is done at the end of each epoch.
         evaluation_strategy="epoch",
+        # Save after every epoch if metric improves
         save_strategy="epoch",
-        learning_rate=5e-4,
-        per_device_train_batch_size=4,
+        learning_rate=train_cfg.learning_rate,
+        per_device_train_batch_size=train_cfg.batch_size,
+        # steps before performing a backward/update pass.
         gradient_accumulation_steps=4,
-        per_device_eval_batch_size=4,
-        num_train_epochs=10,
+        per_device_eval_batch_size=train_cfg.batch_size,
+        num_train_epochs=train_cfg.epochs,
+        # Ratio of training steps used for a linear warmup from 0 to lr
         warmup_ratio=0.1,
         logging_steps=20,
         load_best_model_at_end=True,
         metric_for_best_model="accuracy",
-        push_to_hub=False,
     )
     trainer = Trainer(
         model=model,

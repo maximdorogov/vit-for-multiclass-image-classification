@@ -3,8 +3,52 @@ import torch
 import numpy as np
 import pandas as pd
 from PIL import Image
-from typing import Tuple
+from typing import Any, Tuple
+from typing_extensions import Annotated
+from pydantic import BaseModel, Field
+import evaluate
+import yaml
 
+
+class TrainingConfig(BaseModel):
+    model_name: str = 'WinKawaks/vit-small-patch16-224'
+    epochs: int = 10
+    batch_size: int = 4
+    learning_rate: float = 5e-4
+    data_split: Annotated[float, Field(gt=0, lt=1)]
+
+
+def collate_fn(data: Any):
+    """
+    Collator function to properly pass raw data without preprocessing
+    """
+    return tuple(map(list, zip(*data)))
+
+def load_training_cfg(cfg_path:str) -> TrainingConfig:
+    """
+    Loads training config file.
+
+    Parameters
+    ----------
+    cfg_path:str
+        Path to a trainer config yaml file
+    
+    Returns
+    -------
+    TrainingConfig object
+    """
+    with open(cfg_path) as f:
+        cfg = yaml.safe_load(f)
+    return TrainingConfig(**cfg)
+
+def compute_metrics(eval_pred: Tuple[Any, Any]):
+    """
+    Helper function for evaluation metric computation.
+    """
+    accuracy = evaluate.load("accuracy")
+    predictions, labels = eval_pred
+    predictions = np.argmax(predictions, axis=1)
+    return accuracy.compute(predictions=predictions, references=labels)
 
 class PlantGrassDataset(torch.utils.data.Dataset):
 
@@ -12,6 +56,8 @@ class PlantGrassDataset(torch.utils.data.Dataset):
 
     def __init__(self, dataset_csv:str, folder_path: str, transform=None):
         """
+        Parameters
+        ----------
         dataset_csv:str
             Path to a csv file contaning image name and class labels
         folder_path:str
@@ -45,11 +91,13 @@ class EvalDataset(torch.utils.data.Dataset):
     """
 
     def __init__(
-        self, 
-        dataset_csv: str, 
-        folder_path: str, 
-        patch_shape: Tuple[int, int] = (224, 224)):
+        self,
+        dataset_csv: str,
+        folder_path: str,
+    ):
         """
+        Parameters
+        ----------
         dataset_csv:str
             Path to a csv file contaning image name and class labels
         folder_path:str

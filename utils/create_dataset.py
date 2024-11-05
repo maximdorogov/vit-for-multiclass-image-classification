@@ -3,6 +3,10 @@ import pandas as pd
 import argparse
 import shutil
 
+# NOTE:
+# This is simple script and its not intended to be used as production code
+# Some docstrings could be incomplete and some typehinting could be missing.
+
 
 def is_image(file_name: str) -> bool:
     return file_name.lower().endswith(
@@ -71,7 +75,7 @@ if __name__ == "__main__":
                         help=('Kaggle dataset folder'),
                         type=str,
                         required=True)
-    parser.add_argument('-fo', '--output_csv_file',
+    parser.add_argument('-c', '--output_csv_file',
                         help=('output path for the generated csv file with ',
                               'images path and labels'),
                         type=str,
