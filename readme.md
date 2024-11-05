@@ -7,6 +7,11 @@ During the first part of the task a classical multilabel classification was appl
 
 ## Requirements
 
+Install `python 3.9.20` create a virtual env and execute:
+
+```
+pip install requirements.txt
+```
 
 ## Data preparation
 The dataset provided by Kaggle has the following structure:
@@ -87,7 +92,7 @@ class TrainingConfig(BaseModel):
     data_split: Annotated[float, Field(gt=0, lt=1)]
 ```
 
-EXPLAIN TRAINING SPLIT AND DATA AGUMENTATION
+Random horizontal and vertical flips were applied as data augmentation.
 
 ### Results
 
@@ -123,7 +128,9 @@ Small-flowered Cranesbill       1.00      0.99      1.00       103
                Sugar beet       0.99      0.96      0.97        73
 ```
 
+You can notice a strong confusion pattern between Black-grass and Loose Silky-bent. If we inspect how those classes looks like you will be surprised in how similar they are. Its hard to distiguish one from another even for a trained human!
 
+![title](report/comparison.png)
 
 ## Stage 2: Zero Shot Segmentation Preprocessing
 
@@ -143,5 +150,32 @@ As you can see some of the images are segmented flawosly but others present some
 
 ### Results
 
-The ViT model was trained with exactly the same parameters as in the previous stage but using this new dataset.
+The ViT model was trained with exactly the same parameters as in the previous stage but using this new dataset. The results are bellow:
 
+```
+accuracy: 0.90
+average precission: 0.89
+average f1: 0.88
+average recall: 0.88
+```
+
+![title](report/cfm_tiny_seg.png)
+
+```
+                           precision    recall  f1-score   support
+
+              Black-grass       0.72      0.52      0.60        56
+                 Charlock       0.96      0.98      0.97        81
+                 Cleavers       0.91      0.96      0.94        53
+         Common Chickweed       0.92      0.96      0.94       119
+             Common wheat       0.78      0.76      0.77        37
+                  Fat Hen       0.94      0.91      0.92        98
+         Loose Silky-bent       0.76      0.90      0.82       126
+                    Maize       0.95      0.97      0.96        36
+        Scentless Mayweed       1.00      0.92      0.96       118
+          Shepherds Purse       0.83      0.80      0.82        50
+Small-flowered Cranesbill       0.98      0.98      0.98       103
+               Sugar beet       0.93      0.92      0.92        73
+```
+
+We can see how all metrics decrease with respect of the original results becouse of the segmentation artifacts present in some of the images. Also, the same confusion pattern between Black-grass and Loose Silky-bent is still present. Thos classes are too similar and also are really hard to segment since the grass shape is thin.
