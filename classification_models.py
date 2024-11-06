@@ -12,6 +12,7 @@ class GrassClassificationModel:
         model_path:str,
         use_gpu: bool = True,
         use_fp16: bool = False,
+        output_attention: bool = False 
     ):
         """
         A wrapper for ViT models for image classification.
@@ -25,12 +26,16 @@ class GrassClassificationModel:
         use_fp16: bool
             Use quantized model to speed up inferece time. Can decrease
             model accuracy.
+        output_attention: bool
+            Enable the retrieval of attention data from an inference.
         """
         self._use_gpu = use_gpu
         self._use_fp16 = use_fp16
+        self._output_attention = output_attention
 
-        self._model = ViTForImageClassification.from_pretrained(model_path)
+        self._model = ViTForImageClassification.from_pretrained(model_path, attn_implementation='eager')
         self._transforms = ViTImageProcessor.from_pretrained(model_path)
+        self._attentions = None
 
         self._device = torch.device('cuda' if self._use_gpu else 'cpu')
         self._model.eval()
@@ -39,7 +44,11 @@ class GrassClassificationModel:
             self._model = self._model.half()
         if use_gpu:
             self._model.to(self._device)
-        
+
+    @property
+    def attentions(self):
+        return self._attentions
+
     def run_inference(
             self,
             images: Union[np.ndarray, List[np.ndarray], Image, List[Image]]
@@ -59,9 +68,15 @@ class GrassClassificationModel:
         with torch.no_grad():
             inputs = self._transforms(images)
             inputs = torch.as_tensor(np.array(inputs['pixel_values']))
-            output = self._model(pixel_values=inputs.to(self._device))
+            output = self._model(
+                pixel_values=inputs.to(self._device), 
+                output_attentions=self._output_attention)
             preds = torch.max(output.logits.softmax(-1), dim=-1)
             labels = [
                 self._model.config.id2label[id] 
                 for id in preds.indices.cpu().tolist()]
-            return labels, preds.values.cpu().tolist()
+        
+        if self._output_attention:
+            self._attentions = output.attentions
+
+        return labels, preds.values.cpu().tolist()

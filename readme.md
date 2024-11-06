@@ -1,9 +1,10 @@
 # Vision Transformer for multiclass Plant Seedlings Classification
 
 ## Summary
-This work consists in a dataset preparation, training and evaluation of an image classification system based on the vision transformer (ViT) architecture from [An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale](https://arxiv.org/abs/2010.11929) paper. The dataset was extracted from the [Plant Seedlings Classification kaggle](https://www.kaggle.com/c/plant-seedlings-classification) challenge. 
+This work consists in a dataset preparation, training, and evaluation of an image classification system based on the vision transformer (ViT) architecture from [An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale](https://arxiv.org/abs/2010.11929) paper. The dataset was extracted from the [Plant Seedlings Classification kaggle](https://www.kaggle.com/c/plant-seedlings-classification) challenge.
 
-During the first part of the task a classical multilabel classification was applied with no aditional preprossesing to the input data. In the second part a new dataset was constructed using Zero Shot Segmentation order to get rid of backround features and focus the feature extraction only on the plants present in each image.
+During the first part of the task, a classical multilabel classification was applied with no additional preprocessing to the input data. In the second part, a new dataset was constructed using Zero Shot Segmentation in order to get rid of background features and focus the feature extraction only on the plants present in each image.
+
 
 ## Requirements
 
@@ -34,7 +35,7 @@ plant-seedlings-classification
 ```
 > NOTE: The data from the original `test` folder was excluded from the final dataset since it only contains unlabeled images.
 
-The dataset contains 4750 images distributed accross 12 categories:
+The dataset contains 4750 images distributed accross 12 categories: 
 
 ![title](report/data_distribution.png)
 
@@ -50,14 +51,15 @@ For simplicity the dataset was restructured moving all images in a single folder
 In order to achieve this we have `create_dataset.py` script:
 
 ```python
-python ../utils/create_dataset.py -d KAGGLE_DATASET -fo PATH_TO_OUTPUT_CSV -of PATH_TO_OUTPUT_IMG_FOLDER
+python ./utils/create_dataset.py -d KAGGLE_TRAIN_DATASET_PATH -c OUTPUT_CSV -of OUTPUT_IMAGES_FOLDER
 ```
 This will generate the csv file mentioned above and will move all the images from the subfolders to a single directory.
-> You can also download this dataset from [here]() and drop it into the root of this repository to reproduce all the experiments.
+> You can also download this dataset from [here](https://drive.google.com/file/d/1CcgEuF7Ayp0yWcqYf0GZeZ729rGwv04o/view?usp=sharing) and extract it into the root of this repository to reproduce all the experiments.
+
 
 ## Stage 1: Model training
 
-According to [An Image is Worth 16x16...](https://arxiv.org/abs/2010.11929) Vision Transformer attains excellent results compared to state-of-the-art convolutional networks while requiring fewer resources to train. Thats why smallest ViT model from the family was selected for this task in order to validate the idea and keep the GPU hours low.
+According to [An Image is Worth 16x16...](https://arxiv.org/abs/2010.11929) Vision Transformer attains excellent results compared to state-of-the-art convolutional networks while requiring fewer resources to train. That's why the smallest ViT model from the family was selected for this task in order to validate the idea and keep the GPU hours low.
 
 Used models:
     
@@ -66,7 +68,7 @@ Used models:
 To train a model run:
 
 ```sh
-python train.py -if DATASET_CSV_FILE -d DATASET_IMAGE_FOLDER -e EXPERIMENT_OUTPUT_FOLDER
+python train.py -if DATASET_CSV_FILE -d DATASET_IMAGE_FOLDER -e EXPERIMENT_OUTPUT_FOLDER -t training_cfg.yml
 ```
 
 Were:
@@ -79,7 +81,7 @@ Were:
 
 ### Training Configuration
 
-In order to keep the reproducibility in each experiment a `yaml` file was used to track some of the most important hyperparameters. Most of them are alredy logged by `transformers` trainer class into the experiment folder. The lr scheduller (linear decay), optimizer (AdamW) and loss function (Cross Entropy) were used by default.
+In order to keep the reproducibility in each experiment, a `yaml` file was used to track some of the most important hyperparameters. Most of them are already logged by the `transformers` trainer class into the experiment folder. The LR scheduller (linear decay), optimizer (AdamW) and loss function (Cross Entropy) were used by default.
 
 The default parameters related to data batching and model type are:
 
@@ -92,7 +94,7 @@ class TrainingConfig(BaseModel):
     data_split: Annotated[float, Field(gt=0, lt=1)]
 ```
 
-Random horizontal and vertical flips were applied as data augmentation.
+Random horizontal and vertical flips were applied for data augmentation.
 
 ### Results
 
@@ -128,13 +130,17 @@ Small-flowered Cranesbill       1.00      0.99      1.00       103
                Sugar beet       0.99      0.96      0.97        73
 ```
 
-You can notice a strong confusion pattern between Black-grass and Loose Silky-bent. If we inspect how those classes looks like you will be surprised in how similar they are. Its hard to distiguish one from another even for a trained human!
+You can notice a strong confusion pattern between Black-grass and Loose Silky-bent. If we inspect how those classes look you will be surprised in how similar they are. It's hard to distinguish one from another, even for a trained human!
 
 ![title](report/comparison.png)
 
+This model checkpoint can be downloaded from [HERE](https://drive.google.com/drive/folders/1iJdjsijN_W1W5Yf0Nln37CDafvqO5Du_?usp=sharing)
+
+A wrapper class `GrassClassificationModel`, prepared for inference with this model can be found in `classification_models.py`.
+
 ## Stage 2: Zero Shot Segmentation Preprocessing
 
-In this stage the idea was to preprocess the input images to get rid of backround features and focus the feature extraction only on the plants present in each image (foreground).
+In this stage the idea was to preprocess the input images to get rid of background features and focus the feature extraction only on the plants present in each image (foreground).
 
 
 Two approaches were considered, first the recently released SAM2 segmentator, but it turns to be too slow (even using a GPU) and it tended to oversegment the images so a lot of different heuristics for each grass type had to be defined to clean up the SAM2 output masks. 
@@ -145,8 +151,11 @@ GroundingDINO is a zero shot detector and it was used to select ROIs (regions of
 Some examples of the preprocessed dataset:
 
 ![title](report/segm_grid.png)
+> Note: The masked images are included into the main dataset under the `/masked` directory.
 
-As you can see some of the images are segmented flawosly but others present some artifacts that will impact in the classification accuracy. This is becouse of image resolution, in images of better quality this segmentation aproach worked very well but if the resolution is too low or the grass is too thin it didnt segment very well.
+As you can see some of the images are segmented very well, but others present some artifacts that will impact the classification accuracy. This is because of image resolution,  in images of better quality this segmentation approach worked very well but if the resolution is too low or the grass is too thin it didnt segment very well.
+
+The script for this task can be found in `utils/create_masks.py`
 
 ### Results
 
@@ -178,4 +187,20 @@ Small-flowered Cranesbill       0.98      0.98      0.98       103
                Sugar beet       0.93      0.92      0.92        73
 ```
 
-We can see how all metrics decrease with respect of the original results becouse of the segmentation artifacts present in some of the images. Also, the same confusion pattern between Black-grass and Loose Silky-bent is still present. Thos classes are too similar and also are really hard to segment since the grass shape is thin.
+This model checkpoint can be downloaded from [HERE](https://drive.google.com/drive/folders/1KWQlf_OHUw3HEOjhcPQckrSlGwoY-XvU?usp=sharing)
+
+We can see how all metrics decrease with respect of the original results because of the segmentation artifacts present in some of the images. Also, the same confusion pattern between Black-grass and Loose Silky-bent is still present. Thos classes are too similar and also are really hard to segment since the grass shape is thin.
+
+In my opinion the original model is good enough, using a Zero Shot Segmentation preprocessing didnt worth the computing costs and code overhead for this case.
+
+## The extra mile
+
+### Dataset inconsistencies
+
+According the distribution shown in the data preparation section we have some imbalance in the dataset (a lot of Scentless Mayweed, Small-flowered Cranesbill, Loose Silky-bent and Common Chickweed) . A tipical approach would be downsample those classes in order to re balance the training set but despite that issue the results were pretty good.
+
+### What the models are taking into account?
+
+Here is a very interesting work about what actually the transformers learn: [What do Vision Transformers Learn? A Visual Exploration](https://arxiv.org/abs/2212.06727). According to this work ViTs and CNNs behave similarly in the way features progress from abstract patterns in early layers to concrete objects in late layers.
+
+
